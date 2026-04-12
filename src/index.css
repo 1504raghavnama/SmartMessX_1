@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 20% 98%;
+    --foreground: 220 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 12%;
+
+    --primary: 142 52% 36%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 80% 55%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 40 15% 94%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 142 30% 92%;
+    --accent-foreground: 142 52% 26%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 142 52% 36%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 220 20% 12%;
+    --sidebar-foreground: 220 10% 85%;
+    --sidebar-primary: 142 52% 46%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 220 10% 90%;
+    --sidebar-border: 220 15% 20%;
+    --sidebar-ring: 142 52% 46%;
+
+    --success: 142 60% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 210 80% 52%;
+    --info-foreground: 0 0% 100%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(142, 52%, 36%), hsl(142, 52%, 46%));
+    --gradient-warm: linear-gradient(135deg, hsl(30, 80%, 55%), hsl(38, 92%, 50%));
+    --gradient-hero: linear-gradient(135deg, hsl(220, 20%, 12%), hsl(142, 52%, 26%));
+  }
+
+  .dark {
+    --background: 220 20% 8%;
+    --foreground: 220 10% 92%;
+    --card: 220 18% 12%;
+    --card-foreground: 220 10% 92%;
+    --popover: 220 18% 12%;
+    --popover-foreground: 220 10% 92%;
+    --primary: 142 52% 46%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 30 80% 55%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 15% 16%;
+    --muted-foreground: 220 10% 60%;
+    --accent: 142 30% 18%;
+    --accent-foreground: 142 52% 60%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 142 52% 46%;
+    --sidebar-background: 220 22% 6%;
+    --sidebar-foreground: 220 10% 85%;
+    --sidebar-primary: 142 52% 46%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 12%;
+    --sidebar-accent-foreground: 220 10% 90%;
+    --sidebar-border: 220 15% 12%;
+    --sidebar-ring: 142 52% 46%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
