@@ -7,7 +7,7 @@
 -- 1. PROFILES TABLE
 -- Extends Supabase Auth users with app-specific fields
 -- ============================================================
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   name TEXT NOT NULL DEFAULT '',
@@ -20,7 +20,7 @@ CREATE TABLE public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Everyone can read their own profile
+-- Users can read their own profile
 CREATE POLICY "Users can read own profile"
   ON public.profiles FOR SELECT
   USING (auth.uid() = id);
@@ -30,16 +30,14 @@ CREATE POLICY "Users can update own profile"
   ON public.profiles FOR UPDATE
   USING (auth.uid() = id);
 
--- Owners can read all profiles
+-- Owners can read all profiles (uses JWT metadata, NO recursion)
 CREATE POLICY "Owners can read all profiles"
   ON public.profiles FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
--- Allow insert during signup (profile is created via trigger)
+-- Allow insert during signup (for trigger and manual creation)
 CREATE POLICY "Allow insert for authenticated users"
   ON public.profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
@@ -47,7 +45,7 @@ CREATE POLICY "Allow insert for authenticated users"
 -- ============================================================
 -- 2. PLANS TABLE
 -- ============================================================
-CREATE TABLE public.plans (
+CREATE TABLE IF NOT EXISTS public.plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   slug TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
@@ -66,15 +64,13 @@ CREATE POLICY "Anyone can read plans"
 CREATE POLICY "Owners can manage plans"
   ON public.plans FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 3. MESS_INFO TABLE
 -- ============================================================
-CREATE TABLE public.mess_info (
+CREATE TABLE IF NOT EXISTS public.mess_info (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
@@ -98,15 +94,13 @@ CREATE POLICY "Anyone can read mess_info"
 CREATE POLICY "Owners can update mess_info"
   ON public.mess_info FOR UPDATE
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 4. MENU_ITEMS TABLE
 -- ============================================================
-CREATE TABLE public.menu_items (
+CREATE TABLE IF NOT EXISTS public.menu_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   description TEXT,
@@ -123,15 +117,13 @@ CREATE POLICY "Anyone can read menu_items"
 CREATE POLICY "Owners can manage menu_items"
   ON public.menu_items FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 5. DAILY_MENUS TABLE
 -- ============================================================
-CREATE TABLE public.daily_menus (
+CREATE TABLE IF NOT EXISTS public.daily_menus (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   menu_date DATE NOT NULL DEFAULT CURRENT_DATE,
   meal_type TEXT NOT NULL CHECK (meal_type IN ('breakfast', 'lunch', 'dinner')),
@@ -147,15 +139,13 @@ CREATE POLICY "Anyone can read daily_menus"
 CREATE POLICY "Owners can manage daily_menus"
   ON public.daily_menus FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 6. FESTIVAL_MENUS TABLE
 -- ============================================================
-CREATE TABLE public.festival_menus (
+CREATE TABLE IF NOT EXISTS public.festival_menus (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   meal_type TEXT NOT NULL CHECK (meal_type IN ('breakfast', 'lunch', 'dinner')),
   menu_item_id UUID NOT NULL REFERENCES public.menu_items(id) ON DELETE CASCADE
@@ -170,15 +160,13 @@ CREATE POLICY "Anyone can read festival_menus"
 CREATE POLICY "Owners can manage festival_menus"
   ON public.festival_menus FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 7. ENROLLMENTS TABLE
 -- ============================================================
-CREATE TABLE public.enrollments (
+CREATE TABLE IF NOT EXISTS public.enrollments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   plan_id UUID NOT NULL REFERENCES public.plans(id) ON DELETE CASCADE,
@@ -205,23 +193,19 @@ CREATE POLICY "Students can insert own enrollments"
 CREATE POLICY "Owners can read all enrollments"
   ON public.enrollments FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 CREATE POLICY "Owners can manage enrollments"
   ON public.enrollments FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 8. ATTENDANCE TABLE
 -- ============================================================
-CREATE TABLE public.attendance (
+CREATE TABLE IF NOT EXISTS public.attendance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -250,23 +234,19 @@ CREATE POLICY "Students can update own attendance"
 CREATE POLICY "Owners can read all attendance"
   ON public.attendance FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 CREATE POLICY "Owners can manage attendance"
   ON public.attendance FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 9. PAYMENTS TABLE
 -- ============================================================
-CREATE TABLE public.payments (
+CREATE TABLE IF NOT EXISTS public.payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -290,23 +270,19 @@ CREATE POLICY "Students can insert own payments"
 CREATE POLICY "Owners can read all payments"
   ON public.payments FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 CREATE POLICY "Owners can manage payments"
   ON public.payments FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 10. DEMAND_PREDICTIONS TABLE
 -- ============================================================
-CREATE TABLE public.demand_predictions (
+CREATE TABLE IF NOT EXISTS public.demand_predictions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   day TEXT NOT NULL,
   expected INTEGER NOT NULL DEFAULT 0,
@@ -322,15 +298,13 @@ CREATE POLICY "Anyone can read demand_predictions"
 CREATE POLICY "Owners can manage demand_predictions"
   ON public.demand_predictions FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- 11. OFFERS TABLE
 -- ============================================================
-CREATE TABLE public.offers (
+CREATE TABLE IF NOT EXISTS public.offers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
@@ -348,22 +322,21 @@ CREATE POLICY "Anyone can read active offers"
 CREATE POLICY "Owners can manage offers"
   ON public.offers FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'owner'
-    )
+    (auth.jwt() -> 'user_metadata' ->> 'role') = 'owner'
   );
 
 -- ============================================================
 -- INDEXES
 -- ============================================================
-CREATE INDEX idx_attendance_student_date ON public.attendance(student_id, date);
-CREATE INDEX idx_payments_student ON public.payments(student_id);
-CREATE INDEX idx_enrollments_student_active ON public.enrollments(student_id, is_active);
-CREATE INDEX idx_daily_menus_date ON public.daily_menus(menu_date);
-CREATE INDEX idx_profiles_role ON public.profiles(role);
+CREATE INDEX IF NOT EXISTS idx_attendance_student_date ON public.attendance(student_id, date);
+CREATE INDEX IF NOT EXISTS idx_payments_student ON public.payments(student_id);
+CREATE INDEX IF NOT EXISTS idx_enrollments_student_active ON public.enrollments(student_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_daily_menus_date ON public.daily_menus(menu_date);
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 
 -- ============================================================
 -- TRIGGER: Auto-create profile on signup
+-- Uses ON CONFLICT to prevent duplicate errors
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
@@ -375,12 +348,15 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'name', ''),
     COALESCE(NEW.raw_user_meta_data->>'role', 'student'),
     false
-  );
+  )
+  ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+-- Drop and recreate trigger to ensure it's active
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();

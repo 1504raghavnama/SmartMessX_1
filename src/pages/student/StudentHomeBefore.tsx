@@ -5,11 +5,11 @@ import { useDailyMenu, useFestivalMenu } from "@/hooks/useMenus";
 import MealCard from "@/components/MealCard";
 import { MealCardSkeleton, ErrorDisplay } from "@/components/LoadingSkeleton";
 import { Button } from "@/components/ui/button";
-import { MapPin, Clock, Phone, Sparkles, ArrowRight } from "lucide-react";
+import { MapPin, Clock, Phone, Sparkles, ArrowRight, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 
 const StudentHomeBefore = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { data: messInfo, isLoading: messLoading, error: messError } = useMessInfo();
   const { data: dailyMenu, isLoading: menuLoading } = useDailyMenu();
@@ -27,17 +27,31 @@ const StudentHomeBefore = () => {
       <div className="bg-primary px-4 py-12 lg:px-6 lg:py-16 text-center relative overflow-hidden">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-3xl lg:text-4xl font-bold text-primary-foreground">
-            {messLoading ? "Loading..." : messInfo?.name}
+            {messLoading ? "Loading..." : messInfo?.name || "SmartMessX"}
           </h1>
+          {user && (
+            <p className="text-primary-foreground/90 mt-2 text-sm">
+              Welcome, {user.name || user.email}!
+            </p>
+          )}
           <p className="text-primary-foreground/80 mt-3 max-w-lg mx-auto text-sm lg:text-base">
             {messInfo?.description}
           </p>
-          <Button
-            onClick={() => navigate("/student/enroll")}
-            className="mt-6 bg-card text-foreground hover:bg-card/90 font-semibold h-11 px-6"
-          >
-            Enroll Now <ArrowRight className="ml-2 w-4 h-4" />
-          </Button>
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <Button
+              onClick={() => navigate("/student/enroll")}
+              className="bg-card text-foreground hover:bg-card/90 font-semibold h-11 px-6"
+            >
+              Enroll Now <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+            <Button
+              onClick={() => logout()}
+              variant="outline"
+              className="bg-transparent border-primary-foreground/40 text-primary-foreground hover:bg-primary-foreground/10 font-semibold h-11 px-6"
+            >
+              <LogOut className="mr-2 w-4 h-4" /> Logout
+            </Button>
+          </div>
         </motion.div>
       </div>
 

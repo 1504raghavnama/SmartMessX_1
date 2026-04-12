@@ -26,17 +26,50 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-async function fetchProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
-  if (error) {
-    console.error("Error fetching profile:", error);
+/**
+ * Build an AuthUser from the Supabase auth user object.
+ * This uses auth metadata (always available) so we don't depend on
+ * the profiles table SELECT (which can fail due to RLS).
+ */
+function authUserFromSupabase(user: User): AuthUser {
+  const meta = user.user_metadata || {};
+  return {
+    id: user.id,
+    email: user.email || "",
+    name: meta.name || meta.full_name || user.email?.split("@")[0] || "",
+    role: (meta.role as UserRole) || "student",
+    enrolled: meta.enrolled ?? false,
+  };
+}
+
+/** Try to fetch profile from DB with a timeout — may return null if RLS blocks or times out */
+async function fetchProfileWithTimeout(userId: string, timeoutMs = 3000): Promise<Profile | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle()
+      .abortSignal(controller.signal);
+
+    clearTimeout(timer);
+
+    if (error) {
+      console.warn("fetchProfile error (may be RLS):", error.message);
+      return null;
+    }
+    return data;
+  } catch (err: any) {
+    if (err.name === "AbortError") {
+      console.warn("fetchProfile timed out — using metadata fallback");
+    } else {
+      console.warn("fetchProfile unexpected error:", err);
+    }
     return null;
   }
-  return data;
 }
 
 function profileToAuthUser(profile: Profile): AuthUser {
@@ -49,47 +82,120 @@ function profileToAuthUser(profile: Profile): AuthUser {
   };
 }
 
+/**
+ * Try to get the profile from DB; if not available (RLS issue or timeout),
+ * fall back to auth metadata. Also attempt upsert if profile is missing.
+ */
+async function resolveAuthUser(user: User): Promise<AuthUser> {
+  // Try to read profile from DB (with timeout)
+  const profile = await fetchProfileWithTimeout(user.id, 3000);
+  if (profile) {
+    return profileToAuthUser(profile);
+  }
+
+  // Profile not readable — try to upsert it (also with a timeout)
+  try {
+    const meta = user.user_metadata || {};
+    const { data: upserted, error: upsertErr } = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: user.id,
+          email: user.email || "",
+          name: meta.name || meta.full_name || "",
+          phone: "",
+          role: meta.role || "student",
+          enrolled: false,
+        },
+        { onConflict: "id" }
+      )
+      .select()
+      .maybeSingle();
+
+    if (upserted) {
+      return profileToAuthUser(upserted);
+    }
+
+    if (upsertErr) {
+      console.warn("Profile upsert failed (RLS):", upsertErr.message);
+    }
+  } catch (err) {
+    console.warn("Profile upsert error:", err);
+  }
+
+  // Last resort: build from auth metadata (always works)
+  console.warn("Using auth metadata as profile fallback");
+  return authUserFromSupabase(user);
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize: check existing session
   useEffect(() => {
+    let mounted = true;
+    let ready = false;
+
+    const markReady = () => {
+      if (!ready && mounted) {
+        ready = true;
+        setLoading(false);
+      }
+    };
+
+    // Hard timeout — never stay on loading screen longer than 3 seconds
+    const timeout = setTimeout(markReady, 3000);
+
     const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const profile = await fetchProfile(session.user.id);
-          if (profile) {
-            setUser(profileToAuthUser(profile));
-          }
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (session?.user && mounted) {
+          // Set user immediately from metadata to avoid loading hang
+          const quickUser = authUserFromSupabase(session.user);
+          if (mounted) setUser(quickUser);
+          markReady();
+
+          // Then try to enrich from DB in background
+          const authUser = await resolveAuthUser(session.user);
+          if (mounted) setUser(authUser);
         }
       } catch (err) {
-        console.error("Auth initialization error:", err);
+        console.error("Auth init error:", err);
       } finally {
-        setLoading(false);
+        markReady();
+        clearTimeout(timeout);
       }
     };
 
     initializeAuth();
 
-    // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          // Small delay to allow trigger to create profile
-          await new Promise((r) => setTimeout(r, 500));
-          const profile = await fetchProfile(session.user.id);
-          if (profile) {
-            setUser(profileToAuthUser(profile));
-          }
-        } else if (event === "SIGNED_OUT") {
-          setUser(null);
-        }
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      if (event === "SIGNED_IN" && session?.user) {
+        // Use auth metadata immediately for fast login
+        const quickUser = authUserFromSupabase(session.user);
+        if (mounted) setUser(quickUser);
+        markReady();
+
+        // Then try to get DB profile in background for accurate enrolled status
+        const fullUser = await resolveAuthUser(session.user);
+        if (mounted) setUser(fullUser);
+      } else if (event === "SIGNED_OUT") {
+        if (mounted) setUser(null);
       }
-    );
+      markReady();
+    });
 
     return () => {
+      mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -100,21 +206,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       password,
     });
     if (error) throw error;
+    if (!data.user) throw new Error("Login failed — no user returned.");
 
-    if (data.user) {
-      const profile = await fetchProfile(data.user.id);
-      if (profile) {
-        // Verify role matches
-        if (profile.role !== role) {
-          await supabase.auth.signOut();
-          throw new Error(`This account is registered as "${profile.role}", not "${role}".`);
-        }
-        setUser(profileToAuthUser(profile));
-      }
+    // Build user from auth metadata (instant, no RLS issues)
+    const authUser = authUserFromSupabase(data.user);
+
+    // Check role from metadata
+    if (authUser.role !== role) {
+      await supabase.auth.signOut();
+      throw new Error(
+        `This account is registered as "${authUser.role}", not "${role}".`
+      );
     }
+
+    // Set user immediately from metadata — this triggers navigation instantly
+    setUser(authUser);
+
+    // Try to get full profile from DB in background (for enrolled status)
+    // This runs silently — failures don't block the user
+    resolveAuthUser(data.user)
+      .then((fullUser) => {
+        if (fullUser.role !== role) {
+          // Role mismatch from DB — sign out silently
+          supabase.auth.signOut();
+          setUser(null);
+          return;
+        }
+        setUser(fullUser);
+      })
+      .catch((err) => {
+        // Don't block user — metadata is sufficient
+        console.warn("Background profile resolve failed:", err);
+      });
   };
 
-  const signup = async (email: string, password: string, name: string, role: UserRole) => {
+  const signup = async (
+    email: string,
+    password: string,
+    name: string,
+    role: UserRole
+  ) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -123,16 +254,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       },
     });
     if (error) throw error;
+    if (!data.user) throw new Error("Signup failed — no user returned.");
 
-    // Profile is created via the database trigger (handle_new_user)
-    if (data.user) {
-      // Small delay to let the trigger run
-      await new Promise((r) => setTimeout(r, 1000));
-      const profile = await fetchProfile(data.user.id);
-      if (profile) {
-        setUser(profileToAuthUser(profile));
-      }
-    }
+    // Set user immediately from auth metadata
+    const authUser = authUserFromSupabase(data.user);
+    setUser(authUser);
+
+    // Try to resolve full profile in background (trigger should create it)
+    resolveAuthUser(data.user)
+      .then((fullUser) => {
+        setUser(fullUser);
+      })
+      .catch((err) => {
+        console.warn("Background profile resolve after signup failed:", err);
+      });
   };
 
   const loginWithGoogle = async () => {
@@ -152,9 +287,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    // Clear UI state immediately so user sees login page right away
     setUser(null);
+
+    // Clear Supabase session from localStorage to prevent re-auth race
+    try {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith("sb-")) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {
+      // localStorage may not be available in some environments
+    }
+
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      // Ignore signOut errors — user is already logged out in the UI
+      console.warn("SignOut error (ignored):", err);
+    }
   };
 
   const enroll = async () => {
@@ -164,11 +316,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       .update({ enrolled: true })
       .eq("id", user.id);
     if (error) throw error;
+
+    // Also update auth metadata so it persists across sessions
+    await supabase.auth.updateUser({
+      data: { enrolled: true },
+    });
+
     setUser({ ...user, enrolled: true });
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, loginWithGoogle, loginWithGithub, logout, enroll }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        signup,
+        loginWithGoogle,
+        loginWithGithub,
+        logout,
+        enroll,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
