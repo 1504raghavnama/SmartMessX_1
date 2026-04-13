@@ -73,7 +73,7 @@ const StudentDashboard = () => {
       )}
 
       {/* Festival Special */}
-      {messInfo && festivalMenu && (
+      {messInfo && festivalMenu && messInfo.festivalMode && (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-4 h-4 text-secondary" />
