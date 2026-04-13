@@ -1,36 +1,43 @@
 import { useState } from "react";
 import { useMessInfo } from "@/hooks/useMessInfo";
 import { useDailyMenu } from "@/hooks/useMenus";
-import { useDashboardStats } from "@/hooks/useOwnerData";
+import { useDashboardStats, useEnrolledStudents } from "@/hooks/useOwnerData";
 import { useManualCheckIn } from "@/hooks/useAttendance";
 import MealCard from "@/components/MealCard";
 import StatCard from "@/components/StatCard";
 import { PageSkeleton, ErrorDisplay } from "@/components/LoadingSkeleton";
 import { Users, UtensilsCrossed, TrendingUp, DollarSign, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 
 const OwnerDashboard = () => {
   const { data: messInfo, isLoading: messLoading } = useMessInfo();
   const { data: dailyMenu, isLoading: menuLoading } = useDailyMenu();
   const { data: stats, isLoading: statsLoading, error } = useDashboardStats();
+  const { data: students = [] } = useEnrolledStudents();
   const manualCheckIn = useManualCheckIn();
-  const [studentId, setStudentId] = useState("");
+  const [selectedStudentId, setSelectedStudentId] = useState("");
   const [mealType, setMealType] = useState<"breakfast" | "lunch" | "dinner">("lunch");
 
   if (messLoading || menuLoading || statsLoading) return <PageSkeleton />;
   if (error) return <ErrorDisplay message="Failed to load dashboard data" onRetry={() => window.location.reload()} />;
 
   const handleManualCheckIn = async () => {
-    if (!studentId.trim()) {
-      toast.error("Please enter a student ID");
+    if (!selectedStudentId) {
+      toast.error("Please select a student");
       return;
     }
     try {
-      await manualCheckIn.mutateAsync({ studentId: studentId.trim(), mealType });
+      await manualCheckIn.mutateAsync({ studentId: selectedStudentId, mealType });
       toast.success("Attendance marked manually");
-      setStudentId("");
+      setSelectedStudentId("");
     } catch (err: any) {
       toast.error(err.message || "Failed to mark attendance");
     }
@@ -92,12 +99,24 @@ const OwnerDashboard = () => {
         <h2 className="text-lg font-semibold text-foreground mb-3">🟡 Manual Override</h2>
         <p className="text-sm text-muted-foreground mb-4">Mark attendance manually if QR check-in fails</p>
         <div className="flex flex-col sm:flex-row gap-3">
-          <Input
-            placeholder="Student ID (paste UUID)"
-            value={studentId}
-            onChange={(e) => setStudentId(e.target.value)}
-            className="flex-1"
-          />
+          <Select value={selectedStudentId} onValueChange={setSelectedStudentId}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="Select a student" />
+            </SelectTrigger>
+            <SelectContent>
+              {(!students || students.length === 0) ? (
+                <SelectItem value="" disabled>
+                  No students enrolled
+                </SelectItem>
+              ) : (
+                students.map((student) => (
+                  <SelectItem key={student.id} value={student.id}>
+                    {student.name} ({student.email})
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
           <select
             value={mealType}
             onChange={(e) => setMealType(e.target.value as any)}

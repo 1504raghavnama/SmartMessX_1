@@ -2,6 +2,22 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { AttendanceRecord, PaymentRecord, DemandPrediction, StudentWithEnrollment } from "@/types/database";
 
+/** Lightweight: Just enrolled students (no attendance data) — for dropdowns */
+export function useEnrolledStudents() {
+  return useQuery<Array<{ id: string; name: string; email: string }>>({
+    queryKey: ["enrolledStudents"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, name, email")
+        .eq("role", "student")
+        .eq("enrolled", true);
+      if (error) throw error;
+      return data || [];
+    },
+  });
+}
+
 export function useAllStudents() {
   return useQuery<StudentWithEnrollment[]>({
     queryKey: ["allStudents"],

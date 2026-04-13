@@ -18,14 +18,17 @@ export function useCheckin() {
         .select("id")
         .eq("student_id", user.id)
         .eq("date", today)
-        .maybeSingle();
+        .maybeSingle() as any;
 
       if (existing) {
         // Update existing record
-        const { error } = await supabase
-          .from("attendance")
-          .update({ [mealType]: true, status: "present" })
-          .eq("id", existing.id);
+        const updateData: any = {};
+        updateData[mealType] = true;
+        updateData.status = "present";
+        const { error } = await (supabase
+          .from("attendance") as any)
+          .update(updateData)
+          .eq("id", existing.id as string);
         if (error) throw error;
       } else {
         // Insert new record
@@ -81,13 +84,16 @@ export function useManualCheckIn() {
         .select("id")
         .eq("student_id", studentId)
         .eq("date", today)
-        .maybeSingle();
+        .maybeSingle() as any;
 
       if (existing) {
-        const { error } = await supabase
-          .from("attendance")
-          .update({ [mealType]: true, status: "present" })
-          .eq("id", existing.id);
+        const updateData: any = {};
+        updateData[mealType] = true;
+        updateData.status = "present";
+        const { error } = await (supabase
+          .from("attendance") as any)
+          .update(updateData)
+          .eq("id", existing.id as string);
         if (error) throw error;
       } else {
         const record: any = {
@@ -106,6 +112,7 @@ export function useManualCheckIn() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["allAttendanceToday"] });
       queryClient.invalidateQueries({ queryKey: ["dashboardStats"] });
+      queryClient.invalidateQueries({ queryKey: ["enrolledStudents"] });
     },
   });
 }
