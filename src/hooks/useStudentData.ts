@@ -8,7 +8,7 @@ export function useStudentEnrollment() {
   return useQuery<Enrollment | null>({
     queryKey: ["studentEnrollment", user?.id],
     queryFn: async () => {
-      if (!user) return null;
+      if (!user?.id) return null;
       const { data, error } = await supabase
         .from("enrollments")
         .select("*")
@@ -20,25 +20,46 @@ export function useStudentEnrollment() {
       if (error) throw error;
       return data;
     },
-    enabled: !!user,
+    enabled: !!user?.id,
+    refetchOnMount: true,
   });
 }
 
 export function useStudentAttendance() {
   const { user } = useAuth();
+  console.debug("[useStudentAttendance] Hook render, user:", user?.id);
+  
   return useQuery<AttendanceRecord[]>({
     queryKey: ["studentAttendance", user?.id],
     queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
-        .from("attendance")
-        .select("*")
-        .eq("student_id", user.id)
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return data || [];
+      if (!user?.id) {
+        console.warn("[useStudentAttendance] No user ID, returning empty array");
+        return [];
+      }
+      try {
+        console.debug(`[useStudentAttendance] Fetching records for user ${user.id}`);
+        const { data, error } = await supabase
+          .from("attendance")
+          .select("*")
+          .eq("student_id", user.id)
+          .order("date", { ascending: false });
+        
+        if (error) {
+          console.error("[useStudentAttendance] Query error:", error);
+          throw error;
+        }
+        
+        const result = data || [];
+        console.debug(`[useStudentAttendance] Fetched ${result.length} attendance records for user ${user.id}`);
+        return result;
+      } catch (err) {
+        console.error("[useStudentAttendance] Exception:", err);
+        throw err;
+      }
     },
-    enabled: !!user,
+    enabled: !!user?.id,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -47,7 +68,7 @@ export function useStudentPayments() {
   return useQuery<PaymentRecord[]>({
     queryKey: ["studentPayments", user?.id],
     queryFn: async () => {
-      if (!user) return [];
+      if (!user?.id) return [];
       const { data, error } = await supabase
         .from("payments")
         .select("*")
@@ -56,6 +77,7 @@ export function useStudentPayments() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!user,
+    enabled: !!user?.id,
+    refetchOnMount: true,
   });
 }

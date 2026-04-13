@@ -1,3 +1,4 @@
+import React from "react";
 import { useStudentAttendance } from "@/hooks/useStudentData";
 import { PageSkeleton, ErrorDisplay } from "@/components/LoadingSkeleton";
 import { motion } from "framer-motion";
@@ -5,13 +6,34 @@ import { motion } from "framer-motion";
 const StudentAttendance = () => {
   const { data: attendance, isLoading, error } = useStudentAttendance();
 
-  if (isLoading) return <PageSkeleton />;
-  if (error) return <ErrorDisplay message="Failed to load attendance" onRetry={() => window.location.reload()} />;
+  // Debug logging
+  React.useEffect(() => {
+    console.debug("[StudentAttendance] Component mounted/updated", {
+      isLoading,
+      error: error?.message,
+      attendanceLength: Array.isArray(attendance) ? attendance.length : "not-array",
+      attendance: attendance
+    });
+  }, [attendance, isLoading, error]);
 
-  const records = attendance || [];
-  const presentDays = records.filter((a) => a.status === "present").length;
-  const leaveDays = records.filter((a) => a.status === "leave").length;
-  const absentDays = records.filter((a) => a.status === "absent").length;
+  if (isLoading) return <PageSkeleton />;
+  if (error) {
+    console.error("[StudentAttendance] Rendering error display:", error);
+    return <ErrorDisplay message={`Failed to load attendance: ${error.message}`} onRetry={() => window.location.reload()} />;
+  }
+
+  const records = Array.isArray(attendance) ? attendance : [];
+  
+  if (!Array.isArray(records)) {
+    console.error("[StudentAttendance] Records is not an array:", records);
+    return <div className="p-6 text-center text-muted-foreground">Data error: Invalid attendance format</div>;
+  }
+
+  const presentDays = (records || []).filter((a) => a?.status === "present").length;
+  const leaveDays = (records || []).filter((a) => a?.status === "leave").length;
+  const absentDays = (records || []).filter((a) => a?.status === "absent").length;
+
+  console.debug("[StudentAttendance] Computing stats:", { presentDays, leaveDays, absentDays, total: records.length });
 
   return (
     <div className="space-y-6">
@@ -47,34 +69,41 @@ const StudentAttendance = () => {
               </tr>
             </thead>
             <tbody>
-              {records.length === 0 ? (
+              {!records || records.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No attendance records yet</td>
                 </tr>
               ) : (
-                records.map((record, i) => (
-                  <motion.tr
-                    key={record.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: i * 0.03 }}
-                    className="border-b border-border last:border-0"
-                  >
-                    <td className="px-4 py-3 text-foreground">{record.date}</td>
-                    <td className="px-4 py-3 text-center">{record.breakfast ? "✅" : "❌"}</td>
-                    <td className="px-4 py-3 text-center">{record.lunch ? "✅" : "❌"}</td>
-                    <td className="px-4 py-3 text-center">{record.dinner ? "✅" : "❌"}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                        record.status === "present" ? "bg-accent text-accent-foreground" :
-                        record.status === "leave" ? "bg-warning/10 text-warning" :
-                        "bg-destructive/10 text-destructive"
-                      }`}>
-                        {record.status}
-                      </span>
-                    </td>
-                  </motion.tr>
-                ))
+                records.map((record, i) => {
+                  if (!record) {
+                    console.warn("[StudentAttendance] Null record at index", i);
+                    return null;
+                  }
+                  return (
+                    <motion.tr
+                      key={record.id || i}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: i * 0.03 }}
+                      className="border-b border-border last:border-0"
+                    >
+                      <td className="px-4 py-3 text-foreground">{record.date || "N/A"}</td>
+                      <td className="px-4 py-3 text-center">{(record.breakfast) ? "✅" : "❌"}</td>
+                      <td className="px-4 py-3 text-center">{(record.lunch) ? "✅" : "❌"}</td>
+                      <td className="px-4 py-3 text-center">{(record.dinner) ? "✅" : "❌"}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                          record.status === "present" ? "bg-accent text-accent-foreground" :
+                          record.status === "leave" ? "bg-warning/10 text-warning" :
+                          record.status === "absent" ? "bg-destructive/10 text-destructive" :
+                          "bg-slate-100 text-slate-600"
+                        }`}>
+                          {record.status || "N/A"}
+                        </span>
+                      </td>
+                    </motion.tr>
+                  );
+                })
               )}
             </tbody>
           </table>
