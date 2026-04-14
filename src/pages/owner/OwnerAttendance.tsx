@@ -11,7 +11,20 @@ const OwnerAttendance = () => {
   const { data: messInfo } = useMessInfo();
 
   if (studentsLoading || statsLoading) return <PageSkeleton />;
-  if (error) return <ErrorDisplay message="Failed to load attendance data" onRetry={() => window.location.reload()} />;
+  if (error) {
+    console.error("[OwnerAttendance] Data error:", error);
+    return <ErrorDisplay message="Failed to load attendance data" onRetry={() => window.location.reload()} />;
+  }
+  
+  // Verify essential data exists
+  if (!stats) {
+    console.warn("[OwnerAttendance] Stats data is missing");
+    return <ErrorDisplay message="Attendance stats unavailable" onRetry={() => window.location.reload()} />;
+  }
+  if (!students || !Array.isArray(students)) {
+    console.warn("[OwnerAttendance] Students data is missing or invalid");
+    return <ErrorDisplay message="Student data unavailable" onRetry={() => window.location.reload()} />;
+  }
 
   const mealData = [
     { meal: "Breakfast", present: 0, absent: 0 },
@@ -22,13 +35,15 @@ const OwnerAttendance = () => {
   // Build today's meal-wise data from student attendance
   const today = new Date().toISOString().split("T")[0];
   (students || []).forEach((s) => {
-    const todayRecord = s.attendance.find((a) => a.date === today);
+    // Safely access attendance array
+    const studentAttendance = Array.isArray(s?.attendance) ? s.attendance : [];
+    const todayRecord = studentAttendance.find((a) => a?.date === today);
     if (todayRecord) {
-      if (todayRecord.breakfast) mealData[0].present++;
+      if (todayRecord?.breakfast) mealData[0].present++;
       else mealData[0].absent++;
-      if (todayRecord.lunch) mealData[1].present++;
+      if (todayRecord?.lunch) mealData[1].present++;
       else mealData[1].absent++;
-      if (todayRecord.dinner) mealData[2].present++;
+      if (todayRecord?.dinner) mealData[2].present++;
       else mealData[2].absent++;
     }
   });
@@ -84,7 +99,8 @@ const OwnerAttendance = () => {
                 </tr>
               ) : (
                 students.map((s) => {
-                  const todayRecord = s.attendance.find((a) => a.date === today);
+                  const studentAttendance = Array.isArray(s?.attendance) ? s.attendance : [];
+                  const todayRecord = studentAttendance.find((a) => a?.date === today);
                   return (
                     <tr key={s.id} className="border-b border-border last:border-0">
                       <td className="px-4 py-3">

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -43,6 +43,13 @@ const LoadingScreen = () => (
 
 const AppRoutes = () => {
   const { user, loading } = useAuth();
+  const location = useLocation();
+
+  // Debug logging for route resolution (useful for production troubleshooting)
+  if (process.env.NODE_ENV === 'development') {
+    console.debug("[Router] Current path:", location.pathname);
+    console.debug("[Router] User:", user ? `${user.role} (enrolled: ${user.enrolled})` : "Not logged in");
+  }
 
   if (loading) {
     return <LoadingScreen />;

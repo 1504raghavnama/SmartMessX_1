@@ -38,7 +38,24 @@ const OwnerDashboard = () => {
   }>({ breakfast: [], lunch: [], dinner: [] });
 
   if (messLoading || menuLoading || statsLoading) return <PageSkeleton />;
-  if (error) return <ErrorDisplay message="Failed to load dashboard data" onRetry={() => window.location.reload()} />;
+  if (error) {
+    console.error("[OwnerDashboard] Dashboard error:", error);
+    return <ErrorDisplay message="Failed to load dashboard data" onRetry={() => window.location.reload()} />;
+  }
+  
+  // Verify essential data exists
+  if (!stats) {
+    console.warn("[OwnerDashboard] Stats data is missing");
+    return <ErrorDisplay message="Dashboard data unavailable" onRetry={() => window.location.reload()} />;
+  }
+  if (!messInfo) {
+    console.warn("[OwnerDashboard] Mess info data is missing");
+    return <ErrorDisplay message="Mess information unavailable" onRetry={() => window.location.reload()} />;
+  }
+  if (!dailyMenu) {
+    console.warn("[OwnerDashboard] Daily menu data is missing");
+    return <ErrorDisplay message="Menu data unavailable" onRetry={() => window.location.reload()} />;
+  }
 
   const handleManualCheckIn = async () => {
     if (!selectedStudentId) {
@@ -200,9 +217,9 @@ const OwnerDashboard = () => {
           ) : (
             // View Mode
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <MealCard title="Breakfast" time={messInfo.timings.breakfast} items={dailyMenu.breakfast} type="breakfast" />
-              <MealCard title="Lunch" time={messInfo.timings.lunch} items={dailyMenu.lunch} type="lunch" />
-              <MealCard title="Dinner" time={messInfo.timings.dinner} items={dailyMenu.dinner} type="dinner" />
+              <MealCard title="Breakfast" time={messInfo.timings?.breakfast || "08:00"} items={dailyMenu.breakfast || []} type="breakfast" />
+              <MealCard title="Lunch" time={messInfo.timings?.lunch || "12:00"} items={dailyMenu.lunch || []} type="lunch" />
+              <MealCard title="Dinner" time={messInfo.timings?.dinner || "18:00"} items={dailyMenu.dinner || []} type="dinner" />
             </div>
           )}
         </div>

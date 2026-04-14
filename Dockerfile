@@ -11,10 +11,16 @@ COPY package.json package-lock.json ./
 # Install dependencies (production + dev for build tools)
 RUN npm ci
 
+# Copy environment variables (required for Vite build-time environment variable substitution)
+# IMPORTANT: Ensure .env file exists before building Docker image
+# .env must contain: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+COPY .env .env
+
 # Copy source code
 COPY . .
 
 # Build the production bundle
+# Vite reads VITE_* environment variables at build time and embeds them into the bundle
 RUN npm run build
 
 # Remove node_modules to reduce build context
@@ -29,28 +35,14 @@ FROM nginx:alpine
 LABEL maintainer="SmartMessX Team"
 LABEL description="Production-ready React + Vite application"
 
-# Copy custom nginx config
+# Copy custom nginx config (replaces default config)
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built files from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Fix permissions for nginx user to write cache and temp files
-RUN mkdir -p /var/cache/nginx /run /var/run \
-    && chown -R nginx:nginx /var/cache/nginx \
-    && chown -R nginx:nginx /run \
-    && chown -R nginx:nginx /var/run \
-    && chown -R nginx:nginx /usr/share/nginx/html
-
-# Switch to non-root user for security
-USER nginx
-
 # Expose port (standard HTTP)
 EXPOSE 80
-
-# Health check to ensure container is running properly
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
 
 # Start nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]

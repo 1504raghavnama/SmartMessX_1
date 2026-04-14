@@ -4,9 +4,71 @@ This guide explains how to build, run, and deploy the SmartMessX React + Vite ap
 
 ---
 
+## ⚠️ IMPORTANT: Environment Variables Required for Build
+
+### Why Environment Variables Matter
+
+The Dockerfile builds a Vite + React application. **Vite reads environment variables at build time**, not runtime. This means you must provide the `.env` file **before building the Docker image**.
+
+### Required Environment Variables
+
+The build process requires these variables in your `.env` file:
+
+```bash
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+```
+
+### Setup Steps
+
+1. **Create `.env` file** (if not already present):
+   ```bash
+   # Copy from example
+   cp .env.example .env
+   
+   # Edit with your actual Supabase credentials
+   # DO NOT commit .env to version control
+   ```
+
+2. **Verify `.env` exists**:
+   ```bash
+   ls -la .env  # Should show the file exists
+   cat .env     # Verify contents (mask sensitive data)
+   ```
+
+3. **Then build the Docker image**:
+   ```bash
+   docker build -t smartmessx:latest .
+   ```
+
+### What Happens During Build
+
+1. Docker copies `package.json` and installs dependencies
+2. Docker copies `.env` file into build stage ✅ **NEW**
+3. Docker runs `npm run build` (Vite uses `VITE_*` env variables)
+4. Vite embeds Supabase credentials into the JavaScript bundle
+5. Docker creates final Nginx image with the built bundle
+
+### Troubleshooting Build Issues
+
+**Error: "COPY .env .env" failed** or "Build args not provided"
+- Solution: Create a `.env` file with valid Supabase credentials before building
+- Use: `cp .env.example .env` and edit with your real credentials
+
+**Blank/skeleton screen in Docker container**
+- Cause: `.env` was missing during build, so Supabase URL wasn't embedded
+- Solution: Rebuild with `.env` file present using `docker build -t smartmessx:latest .`
+
+**App connects locally but not in Docker**
+- Cause: Different Supabase environment variables (dev vs prod)
+- Solution: Ensure `.env` has production Supabase credentials for Docker builds
+
+---
+
 ## Quick Start
 
 ### Build the Docker Image
+
 
 ```bash
 docker build -t smartmessx:latest .
