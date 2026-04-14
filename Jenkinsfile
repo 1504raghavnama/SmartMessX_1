@@ -15,6 +15,14 @@ pipeline {
             }
         }
 
+        // ✅ ADD THIS STAGE ONLY
+        stage('Create .env from example') {
+            steps {
+                echo '⚙️ Creating .env from .env.example...'
+                bat 'copy .env.example .env'
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 echo '🐳 Building Docker image...'
